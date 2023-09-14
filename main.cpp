@@ -91,5 +91,5 @@ int main(void)
 	wasapiStopPlayback(wasapiHandle);
 	SetEvent(exitEvent);
 
-	
+	wasapiFree(wasapiHandle);
 }

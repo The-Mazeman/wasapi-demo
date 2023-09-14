@@ -47,7 +47,6 @@ DWORD WINAPI endpointController(LPVOID parameter)
 			}
 			case WAIT_OBJECT_0 + 1:
 			{
-				printf("exit2");
 				freeMemory(endpointControllerInfo);
 				running = 0;
 			}
@@ -91,7 +90,7 @@ DWORD WINAPI endpointLoaderStereoFloat(LPVOID parameter)
 	HANDLE endpointLoaderStartEvent = endpointLoaderInfo->endpointLoaderStartEvent;
 	HANDLE endpointLoaderFinishEvent = endpointLoaderInfo->endpointLoaderFinishEvent;
 
-	HANDLE waitHandle[] = { endpointLoaderStartEvent, exitSemaphore };
+	HANDLE waitHandle[] = {endpointLoaderStartEvent, exitSemaphore};
 	uint running = 1;
 	while(running)
 	{
@@ -108,8 +107,8 @@ DWORD WINAPI endpointLoaderStereoFloat(LPVOID parameter)
 			}
 			case WAIT_OBJECT_0 + 1:
 			{
-				printf("exit1");
 				freeMemory(endpointLoaderInfo);
+				freeMemory(inputBuffer);
 				running = 0;
 			}
 		}
@@ -138,9 +137,13 @@ void createAudioClient(WasapiState* wasapi)
 	result = CoCreateInstance(CLSID_MMDeviceEnumerator, 0, CLSCTX_ALL, IID_IMMDeviceEnumerator, (void**)&audioEndpointEnumerator);
 	assert(result == S_OK);
 
+	wasapi->audioEndpointEnumerator = audioEndpointEnumerator;
+
 	IMMDevice* audioEndpoint = {};
 	result = audioEndpointEnumerator->lpVtbl->GetDefaultAudioEndpoint(audioEndpointEnumerator, eRender, eConsole, &audioEndpoint);
 	assert(result == S_OK);
+
+	wasapi->audioEndpoint = audioEndpoint;
 
 	IAudioClient* audioClient = {};
 	result = audioEndpoint->lpVtbl->Activate(audioEndpoint, IID_IAudioClient, CLSCTX_ALL, 0, (void**)&audioClient);
@@ -317,17 +320,36 @@ void wasapiStopPlayback(void* wasapiHandle)
 {
 	WasapiState* wasapi = (WasapiState*)wasapiHandle;
 	IAudioClient* audioClient = wasapi->audioClient;
-
 	audioClient->lpVtbl->Stop(audioClient);
-	audioClient->lpVtbl->Reset(audioClient);  
 
 	HANDLE exitSemaphore = wasapi->exitSemaphore;
 	ReleaseSemaphore(exitSemaphore, 2, 0);
 	waitForSemaphore(exitSemaphore);
 
-	audioClient->lpVtbl->Start(audioClient);
-	flushBuffer(audioClient);
-	audioClient->lpVtbl->Stop(audioClient);
+	// play all the samples so that no padding remains
 
+	audioClient->lpVtbl->Start(audioClient);
+	flushBuffer(audioClient);                 
+	audioClient->lpVtbl->Stop(audioClient);
+	audioClient->lpVtbl->Reset(audioClient);  
+}
+void wasapiFree(void* wasapiHandle)
+{
+	WasapiState* wasapi = (WasapiState*)wasapiHandle;
+
+	IMMDeviceEnumerator* audioEndpointEnumerator = wasapi->audioEndpointEnumerator;
+	audioEndpointEnumerator->lpVtbl->Release(audioEndpointEnumerator);
+
+	IMMDevice* audioEndpoint = wasapi->audioEndpoint;
+	audioEndpoint->lpVtbl->Release(audioEndpoint);
+
+	IAudioRenderClient* renderClient = wasapi->renderClient;
+	renderClient->lpVtbl->Release(renderClient);
+
+	IAudioClock* audioClock = wasapi->audioClock;
+	audioClock->lpVtbl->Release(audioClock);
+
+	IAudioClient* audioClient = wasapi->audioClient;
+	audioClient->lpVtbl->Release(audioClient);
 
 }

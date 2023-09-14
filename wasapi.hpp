@@ -17,7 +17,8 @@ struct WasapiState
 {
 	AudioEndpointFormat format;
 	uint padding;
-
+	IMMDeviceEnumerator* audioEndpointEnumerator;
+	IMMDevice* audioEndpoint;
 	IAudioClient* audioClient;
 	IAudioRenderClient* renderClient;
 	IAudioClock* audioClock;
@@ -64,3 +65,4 @@ void wasapiInitializePlayback(void*, HANDLE, HANDLE, void**);
 void wasapiPreload(void*);
 void wasapiStartPlayback(void*);
 void wasapiStopPlayback(void*);
+void wasapiFree(void*);
