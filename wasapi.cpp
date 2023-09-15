@@ -352,4 +352,8 @@ void wasapiFree(void* wasapiHandle)
 	IAudioClient* audioClient = wasapi->audioClient;
 	audioClient->lpVtbl->Release(audioClient);
 
+	CloseHandle(wasapi->exitSemaphore);
+	CloseHandle(wasapi->endpointLoaderStartEvent);
+	CloseHandle(wasapi->endpointLoaderFinishEvent);
+	CloseHandle(wasapi->audioCallback);
 }

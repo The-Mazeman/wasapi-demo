@@ -91,5 +91,10 @@ int main(void)
 	wasapiStopPlayback(wasapiHandle);
 	SetEvent(exitEvent);
 
+
 	wasapiFree(wasapiHandle);
+
+	CloseHandle(startLoaderEvent);
+	CloseHandle(finishLoaderEvent);
+	CloseHandle(exitEvent);
 }
