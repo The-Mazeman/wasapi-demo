@@ -1,24 +1,31 @@
  #include "include.hpp"
 #include "main.hpp"
 
-void fillZero(float* outputBuffer, uint frameCount)
+void fillSample(float* input, void* wasapi, uint frameCount)
 {
-	uint framesPerAVX2 = 32 / 8;
+	float* output = {};
+	wasapi::getBuffer(wasapi, &output, frameCount);
+
+	uint floatsPerAVX2 = sizeof(__m256) / sizeof(float);
+	uint framesPerAVX2 = sizeof(__m256) / (sizeof(float) * 2);
 	uint iterationCount = frameCount / framesPerAVX2;
 
-	__m256 zeroAVX2 = _mm256_setzero_ps();
-	__m256* destinationAVX2 = (__m256*)outputBuffer;
 	for (uint i = 0; i != iterationCount; ++i)
 	{
-		_mm256_store_ps((float*)destinationAVX2, zeroAVX2);
-		++destinationAVX2;
+		__m256 sample = _mm256_load_ps(input);
+		_mm256_store_ps(output, sample);
+		input += floatsPerAVX2;
+		output += floatsPerAVX2;
 	}
+
+	wasapi::releaseBuffer(wasapi, frameCount);
 }
 DWORD WINAPI outputLoader(LPVOID parameter)
 {
 	OutputLoaderInfo* outputLoaderInfo = (OutputLoaderInfo*)parameter;
 
-	float* outputBuffer = outputLoaderInfo->outputBuffer;
+	float* sampleChunk = outputLoaderInfo->sampleChunk;
+	void* wasapi = outputLoaderInfo->wasapi;
 	uint frameCount = outputLoaderInfo->bufferFrameCount;
 
 	HANDLE finishLoaderEvent = outputLoaderInfo->finishLoaderEvent;
@@ -33,7 +40,7 @@ DWORD WINAPI outputLoader(LPVOID parameter)
 		{
 			case WAIT_OBJECT_0:
 			{
-				fillZero(outputBuffer, frameCount);
+				fillSample(sampleChunk, wasapi, frameCount);
 				SetEvent(finishLoaderEvent);
 				break;
 			}
@@ -46,21 +53,20 @@ DWORD WINAPI outputLoader(LPVOID parameter)
 	}
 	return 0;
 }
-void createOutputLoader(HANDLE startLoaderEvent, HANDLE finishLoaderEvent, HANDLE exitEvent)
-{
-	OutputLoaderInfo* outputLoaderInfo = {};
-	allocateMemory(sizeof(OutputLoaderInfo), (void**)&outputLoaderInfo);
-	outputLoaderInfo->startLoaderEvent = startLoaderEvent;
-	outputLoaderInfo->finishLoaderEvent = finishLoaderEvent;
-	outputLoaderInfo->exitEvent = exitEvent;
-
-	createThread(outputLoader, outputLoaderInfo);
-}
 int main(void)
 {
-	void* wasapiHandle;
-	wasapiCreate(&wasapiHandle);
+	// create a sin waveform
+	float sampleChunk[2048] = {};
+	float step = (2.0f * (float)M_PI) / 32.0f;
+	for (uint i = 0; i != 1024; ++i)
+	{
+		sampleChunk[i * 2] = sinf(step * (float)i);
+		sampleChunk[(i * 2) + 1] = sinf(step * (float)i);
+	}
+	void* wasapi;
+	wasapi::create(&wasapi);
 
+	// a common playback format
 	AudioEndpointFormat format = {};
 	format.type = WAVE_FORMAT_IEEE_FLOAT;
 	format.bitDepth = 32;
@@ -68,7 +74,7 @@ int main(void)
 	format.sampleRate = 48000;
 	format.bufferFrameCount = 1024;
 
-	wasapiInitializeEndpoint(wasapiHandle, &format);
+	wasapi::initializeEndpoint(wasapi, &format);
 
 	HANDLE startLoaderEvent;
 	createEvent(&startLoaderEvent);
@@ -76,23 +82,32 @@ int main(void)
 	HANDLE finishLoaderEvent;
 	createEvent(&finishLoaderEvent);
 
-	void* outputBuffer;
-	wasapiInitializePlayback(wasapiHandle, startLoaderEvent, finishLoaderEvent, &outputBuffer);
-
 	HANDLE exitEvent;
 	createEvent(&exitEvent);
 
-	createOutputLoader(startLoaderEvent, finishLoaderEvent, exitEvent);
-	wasapiPreload(wasapiHandle);
-	wasapiStartPlayback(wasapiHandle);
+	// a struct containing the required stuff
+	OutputLoaderInfo* outputLoaderInfo = {};
+	allocateMemory(sizeof(OutputLoaderInfo), (void**)&outputLoaderInfo);
+	outputLoaderInfo->sampleChunk = (float*)sampleChunk;
+	outputLoaderInfo->wasapi = wasapi;
+	outputLoaderInfo->startLoaderEvent = startLoaderEvent;
+	outputLoaderInfo->finishLoaderEvent = finishLoaderEvent;
+	outputLoaderInfo->exitEvent = exitEvent;
+	outputLoaderInfo->bufferFrameCount = format.bufferFrameCount;
+	createThread(outputLoader, outputLoaderInfo);
 
-	Sleep(8000);
+	wasapi::preparePlayback(wasapi, startLoaderEvent, finishLoaderEvent); // give wasapi the start and finish event
 
-	wasapiStopPlayback(wasapiHandle);
+	wasapi::startPlayback(wasapi);
+
+	Sleep(1000); // wait for 10 sec
+
+	wasapi::stopPlayback(wasapi); 
+
+	// clean up...
 	SetEvent(exitEvent);
 
-
-	wasapiFree(wasapiHandle);
+	wasapi::free(wasapi);
 
 	CloseHandle(startLoaderEvent);
 	CloseHandle(finishLoaderEvent);

@@ -4,7 +4,7 @@
 #pragma warning(disable: 4189)
 
 #define WIN32_LEAN_AND_MEAN  
-#define CINTERFACE  
+#define _USE_MATH_DEFINES  
 
 #include <windows.h>
 #include <windowsx.h>

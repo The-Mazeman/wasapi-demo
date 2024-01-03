@@ -1,5 +1,4 @@
 #pragma once
-
 #include "include.hpp"
 #include "define.hpp"
 #include "debug.hpp"
@@ -13,7 +12,8 @@ struct AudioEndpointFormat
 	uint32 sampleRate;
 	uint32 type;
 };
-struct WasapiState
+START_SCOPE(wasapi)
+struct State
 {
 	AudioEndpointFormat format;
 	uint padding;
@@ -24,45 +24,21 @@ struct WasapiState
 	IAudioClock* audioClock;
 
 	HANDLE audioCallback;
-	HANDLE bufferLoaderStartEvent;
-	HANDLE endpointLoaderStartEvent;
-	HANDLE endpointLoaderFinishEvent;
+	HANDLE loaderStartEvent;
+	HANDLE loaderFinishEvent;
 	HANDLE exitSemaphore;
 
 	uint endpointBufferFrameCount;
 	uint endpointDeviceFrequency;
 };
-struct EndpointControllerInfo
-{
-	IAudioClient* audioClient;
-	HANDLE exitSemaphore;
 
-	HANDLE endpointLoaderStartEvent;
-	HANDLE endpointLoaderFinishEvent;
-	HANDLE audioCallback;
+void create(void**);
+void initializeEndpoint(void*, AudioEndpointFormat*);
+void preparePlayback(void* wasapi, HANDLE loaderStartEvent, HANDLE loaderFinishEvent);
+void startPlayback(void* wasapi);
+void getBuffer(void* wasapi, float** outputBuffer, uint frameCount);
+void releaseBuffer(void* wasapi, uint frameCount);
+void stopPlayback(void* wasapi);
+void free(void* wasapi);
 
-	uint bufferFrameCount;
-	uint padding;
-};
-struct EndpointLoaderInfo
-{
-	IAudioRenderClient* renderClient;
-	HANDLE exitSemaphore;
-
-	HANDLE bufferLoaderStartEvent;
-	HANDLE bufferLoaderFinishEvent;
-	HANDLE endpointLoaderStartEvent;
-	HANDLE endpointLoaderFinishEvent;
-
-	void* inputBuffer;
-	uint bufferFrameCount;
-	uint padding;
-};
-
-void wasapiCreate(void**);
-void wasapiInitializeEndpoint(void*, AudioEndpointFormat*);
-void wasapiInitializePlayback(void*, HANDLE, HANDLE, void**);
-void wasapiPreload(void*);
-void wasapiStartPlayback(void*);
-void wasapiStopPlayback(void*);
-void wasapiFree(void*);
+END_SCOPE

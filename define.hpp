@@ -16,5 +16,5 @@
 #define uint unsigned int
 #define ushort unsigned short
 
-#define START_NAMESPACE(x) namespace x {
-#define END_NAMESPACE }
+#define START_SCOPE(x) namespace x {
+#define END_SCOPE }

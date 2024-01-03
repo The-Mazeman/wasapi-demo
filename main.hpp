@@ -6,11 +6,12 @@
 
 struct OutputLoaderInfo
 {
+	float* sampleChunk;
+	void* wasapi;
 	HANDLE startLoaderEvent;
 	HANDLE finishLoaderEvent;
 	HANDLE exitEvent;
 
-	float* outputBuffer;
 	uint bufferFrameCount;
 	uint padding;
 };
